@@ -1,0 +1,43 @@
+#!/bin/bash
+#
+### BEGIN INIT INFO
+# Provides: zwave-socat-controller
+# Required-Start: $syslog
+# Required-Stop: $syslog
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Description: Startup/Shutdown zwave-socat-controller
+### END INIT INFO
+
+case "$1" in
+    start)
+        # Start ZWave-Socat-Controller
+        echo -n "Starting ZWave-Socat-Controller..."
+        /usr/bin/python /root/zwave-socat-controller/zwave-socat-controller.py &
+        echo "OK"
+        ;;
+    status)
+        # Check ZWave-Socat-Controller status
+        echo "Checking ZWave-Socat-Controller status..."
+        PID=$(ps aux | grep 'zwave-socat-controller.py' | grep python | awk '{print $2}')
+        if ps aux | grep 'zwave-socat-controller.py' | grep python > /dev/null 2> /dev/null; then
+           echo "Service is running: $PID"
+        else
+           echo "Service is not running"
+        fi
+        ;;
+    stop)
+        # Stop ZWave-Socat-Controller
+        echo -n "Shutdown ZWave-Socat-Controller ... "
+        kill -9 $(ps aux | grep 'zwave-socat-controller.py' | awk '{print $2}') 2> /dev/null
+        echo "OK"
+        ;;
+    reload|restart)
+        $0 stop
+        $0 start
+        ;;
+    *)
+        echo "Usage: $0 start|stop|restart|status|reload"
+        exit 1
+esac
+exit 0
