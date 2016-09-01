@@ -81,13 +81,13 @@ class Node(object):
         self.client.loop_start()
 
     def mqtt_message_handler(self, client, obj, msg):
-        if "$online" in msg.topic: 
+        if "$online" in msg.topic:
             if msg.payload == "false": self.remote_socat_status = "false"
             self.online = msg.payload
             logger.debug("[%s] Node online: %s" % (self.name, msg.payload))
         if "$localip" in msg.topic: self.remote_ip = msg.payload
         if "socat/port" in msg.topic: self.remote_port = msg.payload
-        if "socat/status" in msg.topic: 
+        if "socat/status" in msg.topic:
             self.remote_socat_status = msg.payload
             logger.debug("[%s] Remote socat status: %s" % (self.name, msg.payload))
         self.handle_socat_connection()
@@ -98,7 +98,7 @@ class Node(object):
         # Special case where the timer is active
         if self.kill_timer:
             if node_healthy == "true":
-                logger.warning("[%s] Fake node death, not killing the local port..." % (self.name))        
+                logger.warning("[%s] Fake node death, not killing the local port..." % (self.name))
                 self.kill_timer.cancel()
                 self.kill_timer = None
             return
@@ -150,8 +150,8 @@ class Node(object):
 
     def delete(self):
         self.client.loop_stop()
-   
-     
+
+
 class Configuration(object):
 
     DEFAULT_PREFS = {
@@ -197,12 +197,12 @@ class Configuration(object):
             )
 
             setattr(self, key, val)
-    
+
 
 if __name__ == '__main__':
     try:
         if not os.geteuid() == 0:
-            sys.exit("You must run this script as root")    
+            sys.exit("You must run this script as root")
 
         logger.info("Starting zwave-socat-controller program...")
 

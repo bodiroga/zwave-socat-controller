@@ -3,6 +3,9 @@ import time
 import re
 import subprocess
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 class OpenHABBundlesHandler(object):
 
@@ -50,7 +53,7 @@ class OpenHABBundlesHandler(object):
         while(self.get_binding_realtime_state(name) != "ACTIVE"):
             if time.time() - start_time > self.command_timeout: return 0
             time.sleep(.5)
-        logger.debug("[{}] Binding started in {} seconds".format(name,time.time() - start_time))
+        logger.debug("[{0}] Binding started in {1} seconds".format(name,time.time() - start_time))
         return 1
 
     def stop_bundle_by_id(self, bundle_id):
@@ -58,24 +61,26 @@ class OpenHABBundlesHandler(object):
         if not self.openhab_online: return 1
         name = self.get_binding_by_bundle(bundle_id)
         command = """{ echo 'stop "%s"'; sleep %s; } | telnet %s %s""" % (bundle_id, self.telnet_delay, self.host, self.port)
-        start_response = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True).stdout.read()
+        stop_response = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True).stdout.read()
         start_time = time.time()
         while(self.get_binding_realtime_state(name) != "RESOLVED"):
             if time.time() - start_time > self.command_timeout: return 0
             time.sleep(.5)
-        logger.debug("[{}] Binding stopped in {} seconds".format(name,time.time() - start_time))
+        logger.debug("[{0}] Binding stopped in {1} seconds".format(name,time.time() - start_time))
         return 1
 
     def stop_binding(self, name):
         self.update_zwave_bundles_info()
         if not self.openhab_online: return 1
-        id = self.zwave_bindings[name]["id"]
+        if name in self.zwave_bindings: id = self.zwave_bindings[name]["id"]
+        else: return 1
         return self.stop_bundle_by_id(id)
 
     def start_binding(self, name):
         self.update_zwave_bundles_info()
         if not self.openhab_online: return 1
-        id = self.zwave_bindings[name]["id"]
+        if name in self.zwave_bindings: id = self.zwave_bindings[name]["id"]
+        else: return 1
         return self.start_bundle_by_id(id)
 
     def get_binding_by_bundle(self, id):
