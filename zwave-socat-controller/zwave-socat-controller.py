@@ -206,7 +206,7 @@ if __name__ == '__main__':
 
         logger.info("Starting zwave-socat-controller program...")
 
-        c = Configuration("/home/aitor/git/zwave-socat-controller/configuration.json")
+        c = Configuration()
 
         if c.autodiscovery_enabled:
             logger.info("Autodiscovery mode enabled")
