@@ -19,11 +19,11 @@ class OpenHABBundlesHandler(object):
         self.last_update = 0
         self.update_zwave_bundles_info()
 
-    def update_zwave_bundles_info(self):
-        if time.time() - self.last_update < 5: return
+    def update_zwave_bundles_info(self, forced=False):
+        if not forced and time.time() - self.last_update < 15: return
 
         ss_command = "{ echo 'ss'; sleep %s; } | telnet %s %s" % (self.telnet_delay, self.host, self.port)
-        ss_response = subprocess.Popen(ss_command, stdout=subprocess.PIPE, shell=True).stdout.read()
+        ss_response = subprocess.Popen(ss_command, stdout=subprocess.PIPE, shell=True).communicate()[0]
 
         if ss_response == "Trying 127.0.0.1...\n":
             self.openhab_online = False
@@ -48,7 +48,7 @@ class OpenHABBundlesHandler(object):
         if (self.get_binding_realtime_state(name) == "ACTIVE"):
             self.stop_bundle_by_id(bundle_id)
         command = """{ echo 'start "%s"'; sleep %s; } | telnet %s %s""" % (bundle_id, self.telnet_delay, self.host, self.port)
-        start_response = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True).stdout.read()
+        start_response = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True).communicate()[0]
         start_time = time.time()
         while(self.get_binding_realtime_state(name) != "ACTIVE"):
             if time.time() - start_time > self.command_timeout: return 0
@@ -61,7 +61,7 @@ class OpenHABBundlesHandler(object):
         if not self.openhab_online: return 1
         name = self.get_binding_by_bundle(bundle_id)
         command = """{ echo 'stop "%s"'; sleep %s; } | telnet %s %s""" % (bundle_id, self.telnet_delay, self.host, self.port)
-        stop_response = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True).stdout.read()
+        stop_response = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True).communicate()[0]
         start_time = time.time()
         while(self.get_binding_realtime_state(name) != "RESOLVED"):
             if time.time() - start_time > self.command_timeout: return 0
@@ -91,6 +91,6 @@ class OpenHABBundlesHandler(object):
         return None
 
     def get_binding_realtime_state(self, name):
-        self.update_zwave_bundles_info()
+        self.update_zwave_bundles_info(forced=True)
         if not self.openhab_online: return None
         return self.zwave_bindings[name]["status"]
