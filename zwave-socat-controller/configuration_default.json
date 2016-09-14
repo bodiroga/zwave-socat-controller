@@ -6,6 +6,6 @@
   "MQTT_HOMIE_PREFIX":"devices",
   "AUTODISCOVERY_ENABLED": true,
   "ZWAVE_NETWORKS": "",
-  "OPENHAB_ENABLED": true,
+  "OPENHAB_CONTROL_ENABLED": true,
   "OPENHAB_HOST":"localhost"
 }

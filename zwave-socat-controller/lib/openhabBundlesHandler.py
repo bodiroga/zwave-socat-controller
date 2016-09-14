@@ -14,7 +14,7 @@ class OpenHABBundlesHandler(object):
         self.port = port
         self.telnet_delay = telnet_delay
         self.command_timeout = command_timeout
-        self.zwave_bindings = None
+        self.zwave_bindings = {}
         self.openhab_online = None
         self.last_update = 0
         self.update_zwave_bundles_info()
@@ -22,7 +22,7 @@ class OpenHABBundlesHandler(object):
     def update_zwave_bundles_info(self, forced=False):
         if not forced and time.time() - self.last_update < 15: return
 
-        ss_command = "{ echo 'ss'; sleep %s; } | telnet %s %s" % (self.telnet_delay, self.host, self.port)
+        ss_command = "{ echo 'ss'; sleep %s; } | telnet %s %s 2>/dev/null" % (self.telnet_delay, self.host, self.port)
         ss_response = subprocess.Popen(ss_command, stdout=subprocess.PIPE, shell=True).communicate()[0]
 
         if ss_response == "Trying 127.0.0.1...\n":
@@ -47,7 +47,7 @@ class OpenHABBundlesHandler(object):
         name = self.get_binding_by_bundle(bundle_id)
         if (self.get_binding_realtime_state(name) == "ACTIVE"):
             self.stop_bundle_by_id(bundle_id)
-        command = """{ echo 'start "%s"'; sleep %s; } | telnet %s %s""" % (bundle_id, self.telnet_delay, self.host, self.port)
+        command = """{ echo 'start "%s"'; sleep %s; } | telnet %s %s 2>/dev/null""" % (bundle_id, self.telnet_delay, self.host, self.port)
         start_response = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True).communicate()[0]
         start_time = time.time()
         while(self.get_binding_realtime_state(name) != "ACTIVE"):
@@ -60,7 +60,7 @@ class OpenHABBundlesHandler(object):
         self.update_zwave_bundles_info()
         if not self.openhab_online: return 1
         name = self.get_binding_by_bundle(bundle_id)
-        command = """{ echo 'stop "%s"'; sleep %s; } | telnet %s %s""" % (bundle_id, self.telnet_delay, self.host, self.port)
+        command = """{ echo 'stop "%s"'; sleep %s; } | telnet %s %s 2>/dev/null""" % (bundle_id, self.telnet_delay, self.host, self.port)
         stop_response = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True).communicate()[0]
         start_time = time.time()
         while(self.get_binding_realtime_state(name) != "RESOLVED"):
