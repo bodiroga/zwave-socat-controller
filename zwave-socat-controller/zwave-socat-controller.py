@@ -43,6 +43,7 @@ class ZWaveBindingsHandler(object):
         file = page.read()
         with open(self.addons_folder + "/" + addon_name, 'wb') as f:
             f.write(file)
+        logger.info("[ZWaveHandler] '{}' binding installed".format(addon_name.split(".")[3].split("_")[0]))
 
     def __install_habmin_html_files(self):
         url = "https://github.com/cdjackson/HABmin/archive/master.zip"
@@ -136,28 +137,36 @@ class ZWaveBindingsHandler(object):
             habmin_binding_to_install = set_zwave_binding_from_number(max_zwave_bindings_number)
             habmin_binding_to_uninstall = installed_habmin_version
 
+        # ZWave bindings installation
+        zwave_bindings_to_install_threads = []
         for binding in zwave_bindings_to_install:
             try:
-                self.__install_addon_from_url(self.ghh.get_zwave_url_by_name(binding))
-                logger.info("[ZWaveHandler] '{}' binding installed".format(binding))
+                url = self.ghh.get_zwave_url_by_name(binding)
+                zwave_bindings_to_install_threads.append(threading.Thread(target=self.__install_addon_from_url, args=(url,)))
             except KeyError:
                 logger.error("[ZWaveHandler] '{}' binding cannot be installed".format(binding))
+        for thread in zwave_bindings_to_install_threads: thread.start()
+        for thread in zwave_bindings_to_install_threads: thread.join()
+        # ZWave bindings uninstallation
         for binding in zwave_bindings_to_uninstall:
             os.remove(self.addons_folder + "/" + installed_zwave_bindings[binding])
             logger.info("[ZWaveHandler] '{}' binding uninstalled".format(binding))
+        # HABmin binding installation
         if habmin_binding_to_install:
             try:
                 self.__install_addon_from_url(self.ghh.get_habmin_url_by_name(habmin_binding_to_install))
-                logger.info("[ZWaveHandler] '{}' habmin installed".format(habmin_binding_to_install))
             except KeyError:
                 habmin_binding_to_uninstall = None
                 logger.error("[ZWaveHandler] '{}' habmin cannot be installed".format(habmin_binding_to_install))
+        # HABmin binding uninstallation
         if habmin_binding_to_uninstall:
             os.remove(self.addons_folder + "/" + installed_habmin)
             logger.debug("[ZWaveHandler] '{}' habmin uninstalled".format(habmin_binding_to_uninstall))
+        # HABmin web files installation
         if not os.path.isdir(self.habmin_folder):
             self.__install_habmin_html_files()
             logger.debug("[ZWaveHandler] HABmin html files installed")
+        # HABmin extended web files installation
         if not os.path.isfile(self.habmin_folder + "/extension_installed"):
             self.__install_habmin_extension_html_files()
             logger.debug("[ZWaveHandler] HABmin extension html files installed")
@@ -551,7 +560,7 @@ if __name__ == '__main__':
             for network in zwave_networks:
                 Node(network, mqtt_params, config["MQTT_HOMIE_PREFIX"], config["OPENHAB_CONTROL_ENABLED"])
 
-        signal.pause()               
+        signal.pause()
     except KeyboardInterrupt:
         logger.info("[Main] Stopping the script manually...")
     except Exception as e:
