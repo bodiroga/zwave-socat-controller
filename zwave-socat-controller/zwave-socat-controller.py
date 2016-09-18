@@ -35,6 +35,7 @@ class ZWaveBindingsHandler(object):
         self.habmin_folder = habmin_folder
         self.webapps_folder = "/".join(self.habmin_folder.split("/")[0:-1])
         self.default_file = default_file
+        self.oh = OpenHABHandler()
         logger.debug("[ZWaveHandler] Service started")
 
     def __install_addon_from_url(self, url):
@@ -70,18 +71,14 @@ class ZWaveBindingsHandler(object):
         zip_ref.close()
         os.remove(zip_file_path)
 
-    def restart_openhab(self):
-        restart_command = "/etc/init.d/openhab restart"
-        result = subprocess.Popen(restart_command, stdout=subprocess.PIPE, shell=True)
-
     def update(self, zwave_bindings):
         reboot = self.update_jars(zwave_bindings)
         reboot = self.update_configuration_file(zwave_bindings) or reboot
         reboot = self.update_default_file(zwave_bindings) or reboot
         logger.debug("[ZWaveHandler] Update finished")
         if reboot:
-            logger.info("[ZwaveHandler] Configuration changed, restarting openHAB")
-            self.restart_openhab()
+            logger.info("[ZwaveHandler] Configuration changed")
+            self.oh.restart_openhab()
 
     def update_jars(self, zwave_bindings):
         def get_zwave_bindings_numbers(list):
@@ -392,6 +389,7 @@ class NodeController(object):
         self.timer.start()
 
     def process_detected_nodes(self):
+        self.timer = None
         correct_nodes = []
         for node_name, node_info in self.detected_nodes.iteritems():
             if "last_update" in node_info and int(time.time()) - node_info["last_update"] <= self.MAX_TIMEOUT*60*60:
@@ -410,7 +408,6 @@ class NodeController(object):
         for node in delete_nodes:
             self.active_nodes[node].delete()
             del self.active_nodes[node]
-        self.timer = None
 
 
 class Node(object):
@@ -500,7 +497,7 @@ class Node(object):
         logger.debug("[%s] Local port started..." % (self.name))
         if Node.openhab_control_enabled and control_binding:
             if not Node.oh.start_binding(self.name):
-                logger.error("[%s] Binding has failed starting... Restarting openHAB" % (self.name))
+                logger.error("[%s] Binding has failed starting..." % (self.name))
                 self.restart_openhab()
             else:
                 logger.debug("[%s] Binding correctly started..." % (self.name))
@@ -508,14 +505,12 @@ class Node(object):
     def restart_openhab(self):
         if Node.restart_timer:
             Node.restart_timer.cancel()
-        Node.restart_timer = threading.Timer(1, self.__restart_openhab)
+        Node.restart_timer = threading.Timer(1.5, self.__restart_openhab)
         Node.restart_timer.start()
 
     def __restart_openhab(self):
-        restart_command = "/etc/init.d/openhab restart"
-        result = threading.Timer(1, subprocess.Popen(restart_command, stdout=subprocess.PIPE, shell=True))
-        logger.debug("[Node] openHAB restarted")
         Node.restart_timer = None
+        Node.oh.restart_openhab()
 
     def delete(self):
         self.client.loop_stop()
@@ -540,8 +535,8 @@ def load_configuration(config_file=None):
 if __name__ == '__main__':
     try:
         if not os.geteuid() == 0:
-            sys.exit("You must run this script as root")
             logger.error("[Main] You must run this script as root")
+            sys.exit("You must run this script as root")
 
         logger.info("[Main] Starting zwave-socat-controller program...")
 
