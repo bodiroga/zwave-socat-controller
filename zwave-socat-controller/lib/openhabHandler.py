@@ -46,6 +46,7 @@ class OpenHABHandler(object):
         return self.__start_bundle_by_id(bundle_id)
 
     def restart_openhab(self, timeout=90):
+        logger.info("[openHABHandler] Restarting openHAB...")
         restart_time = time.time()
         self.openhab_state = "stopping"
         self.__update_installed_addons()
@@ -57,6 +58,8 @@ class OpenHABHandler(object):
                 break
         if time.time() > restart_time + timeout:
             logger.error("[openHABHandler] Timeout restarting openHAB (> {} seconds)".format(timeout))
+        else:
+            logger.info("[openHABHandler] openHAB restarted in {} seconds".format(time.time()-restart_time))
 
     # Private methods
 
