@@ -12,7 +12,7 @@ import json
 import zipfile
 import signal
 import paho.mqtt.client as mqtt_client
-from lib.openhabBundlesHandler import OpenHABBundlesHandler
+from lib.openhabHandler import OpenHABHandler
 logging.basicConfig(filename="/var/log/zwave-socat-controller.log", format='%(asctime)s %(levelname)-8s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -418,7 +418,7 @@ class Node(object):
     KILL_TIME = 3
     restart_timer = None
     openhab_control_enabled = None
-    obh = None
+    oh = None
 
     def __init__(self, name, mqtt_params=MqttBrokerParameters(), prefix="devices", openhab_control_enabled=True):
         self.mqtt_params = mqtt_params
@@ -428,7 +428,7 @@ class Node(object):
         self.local_socat_status = None
         self.remote_ip = self.remote_port = self.remote_socat_status = None
         if not Node.openhab_control_enabled: Node.openhab_control_enabled = openhab_control_enabled
-        if not Node.obh and Node.openhab_control_enabled: Node.obh = OpenHABBundlesHandler()
+        if not Node.oh and Node.openhab_control_enabled: Node.oh = OpenHABHandler()
         self.kill_timer = None
         self.kill_local_port(control_binding=False)
         time.sleep(0.05)
@@ -481,7 +481,7 @@ class Node(object):
     def kill_local_port(self, control_binding=True):
         kill_command = "kill -9 $(ps ax | grep \"/usr/bin/socat\" | grep \"%s,\" | grep -v grep | awk \'{print $1}\')" % (self.name)
         if Node.openhab_control_enabled and control_binding:
-            if not Node.obh.stop_binding(self.name):
+            if not Node.oh.stop_binding(self.name):
                 logger.error("[%s] Binding has failed stopping... Restarting openHAB" % (self.name))
                 self.restart_openhab()
             else:
@@ -499,7 +499,7 @@ class Node(object):
         self.local_socat_status = "true"
         logger.debug("[%s] Local port started..." % (self.name))
         if Node.openhab_control_enabled and control_binding:
-            if not Node.obh.start_binding(self.name):
+            if not Node.oh.start_binding(self.name):
                 logger.error("[%s] Binding has failed starting... Restarting openHAB" % (self.name))
                 self.restart_openhab()
             else:
