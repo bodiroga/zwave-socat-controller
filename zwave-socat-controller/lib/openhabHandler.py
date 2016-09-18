@@ -45,7 +45,7 @@ class OpenHABHandler(object):
             return 1
         return self.__start_bundle_by_id(bundle_id)
 
-    def reboot_openhab(self, timeout=90):
+    def restart_openhab(self, timeout=90):
         restart_time = time.time()
         self.openhab_state = "stopping"
         self.__update_installed_addons()
