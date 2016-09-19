@@ -399,6 +399,7 @@ class NodeController(object):
         delete_nodes = list(set(active_nodes_list) - set(correct_nodes))
         for node in new_nodes:
             logger.info("[Controller] Node detected: {}".format(node))
+            self.active_nodes[node] = None
         for node in delete_nodes:
             logger.info("[Controller] Node deleted: {}".format(node))
         if self.openhab_control_enabled and (new_nodes or delete_nodes):
