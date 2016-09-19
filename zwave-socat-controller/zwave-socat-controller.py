@@ -485,7 +485,6 @@ class Node(object):
             else:
                 logger.debug("[%s] Binding correctly stopped..." % (self.name))
         error = subprocess.Popen(kill_command, stderr=subprocess.PIPE, shell=True).communicate()[1]
-        error = False
         self.local_socat_status = "false"
         self.kill_timer = None
         if not error: logger.debug("[%s] Local port killed..." % (self.name))
