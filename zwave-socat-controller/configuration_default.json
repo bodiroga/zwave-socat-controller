@@ -7,5 +7,6 @@
   "AUTODISCOVERY_ENABLED": true,
   "ZWAVE_NETWORKS": "",
   "OPENHAB_CONTROL_ENABLED": true,
-  "OPENHAB_HOST":"localhost"
+  "OPENHAB_HOST":"localhost",
+  "DEBUG": false
 }

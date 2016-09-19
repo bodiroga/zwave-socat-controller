@@ -541,6 +541,10 @@ if __name__ == '__main__':
         logger.info("[Main] Starting zwave-socat-controller program...")
 
         config = load_configuration()
+
+        if config["DEBUG"]:
+            logger.setLevel(logging.DEBUG)
+
         mqtt_params = MqttBrokerParameters(config["MQTT_HOST"], config["MQTT_PORT"], config["MQTT_USERNAME"], config["MQTT_PASSWORD"])
 
         if config["AUTODISCOVERY_ENABLED"]:
