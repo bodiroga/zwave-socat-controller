@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import time
+import threading
 import re
 import subprocess
 import os
@@ -19,6 +20,7 @@ class OpenHABHandler(object):
         self.zwave_bindings = {}
         self.openhab_online = None
         self.openhab_state = ""
+        self.restart_timer = None
         self.last_update = 0
         self.__update_openhab_information()
         self.__update_installed_addons()
@@ -46,20 +48,10 @@ class OpenHABHandler(object):
         return self.__start_bundle_by_id(bundle_id)
 
     def restart_openhab(self, timeout=90):
-        logger.info("[openHABHandler] Restarting openHAB...")
-        restart_time = time.time()
-        self.openhab_state = "stopping"
-        self.__update_installed_addons()
-        subprocess.Popen("/etc/init.d/openhab restart", stdout=subprocess.PIPE, shell=True)
-        while not self.openhab_online or not self.openhab_state == "started":
-            self.__update_openhab_information(forced=True)
-            time.sleep(0.2)
-            if time.time() > restart_time + timeout:
-                break
-        if time.time() > restart_time + timeout:
-            logger.error("[openHABHandler] Timeout restarting openHAB (> {} seconds)".format(timeout))
-        else:
-            logger.info("[openHABHandler] openHAB restarted in {} seconds".format(time.time()-restart_time))
+        if self.restart_timer is not None:
+            self.restart_timer.cancel()
+        self.restart_timer = threading.Timer(1.5, self.__restart_openhab, [timeout])
+        self.restart_timer.start()
 
     # Private methods
 
@@ -168,7 +160,24 @@ class OpenHABHandler(object):
         return None
 
     def __get_binding_realtime_state(self, name):
+        self.restart_timer = None
         self.__update_openhab_information(forced=True)
         if not self.openhab_online:
             return None
         return self.zwave_bindings[name]["status"]
+
+    def __restart_openhab(self, timeout):
+        logger.info("[openHABHandler] Restarting openHAB...")
+        restart_time = time.time()
+        self.openhab_state = "stopping"
+        self.__update_installed_addons()
+        subprocess.Popen("/etc/init.d/openhab restart", stdout=subprocess.PIPE, shell=True)
+        while not self.openhab_online or not self.openhab_state == "started":
+            self.__update_openhab_information(forced=True)
+            time.sleep(0.2)
+            if time.time() > restart_time + timeout:
+                break
+        if time.time() > restart_time + timeout:
+            logger.error("[openHABHandler] Timeout restarting openHAB (> {} seconds)".format(timeout))
+        else:
+            logger.info("[openHABHandler] openHAB restarted in {} seconds".format(time.time()-restart_time))
