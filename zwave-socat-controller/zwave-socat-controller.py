@@ -13,6 +13,7 @@ import zipfile
 import signal
 import paho.mqtt.client as mqtt_client
 from lib.openhabHandler import OpenHABHandler
+import lib.notificationsHandler as nH
 logging.basicConfig(filename="/var/log/zwave-socat-controller.log", format='%(asctime)s %(levelname)-8s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -407,9 +408,11 @@ class NodeController(object):
         delete_nodes = list(set(active_nodes_list) - set(correct_nodes))
         for node in new_nodes:
             logger.info("[Controller] Node detected: {}".format(node))
+            nH.send_notification({"text": "New '{0}' node detected".format(node)})
             NodeController.active_nodes[node] = Node(node, self.mqtt_params, self.prefix)
         for node in delete_nodes:
             logger.info("[Controller] Node deleted: {}".format(node))
+            nH.send_notification({"text": "Old '{0}' node deleted".format(node)})
             NodeController.active_nodes[node].delete()
             del NodeController.active_nodes[node]
         if NodeController.openhab_control_enabled and (new_nodes or delete_nodes):
@@ -493,6 +496,7 @@ class Node(object):
             if node_healthy == "true":
                 if self.local_port and self.remote_ip and self.remote_port:
                     logger.info("[%s] Node healthy..." % (self.name))
+                    nH.send_notification({"text": "'{0}' node ({1}) is healthy".format(self.name, self.remote_ip)})
                     self.start_local_port()
             # The remote socat is offline, so we kill the local socat
             else:
@@ -501,6 +505,7 @@ class Node(object):
 
     def mark_as_not_healthy(self):
         logger.warning("[%s] Node not healthy..." % (self.name))
+        nH.send_notification({"text": "'{0}' node ({1}) is not healthy".format(self.name, self.remote_ip)})
         self.kill_local_port()
 
     def kill_local_port(self):
@@ -557,6 +562,14 @@ if __name__ == '__main__':
             logger.setLevel(logging.DEBUG)
 
         mqtt_params = MqttBrokerParameters(config["MQTT_HOST"], config["MQTT_PORT"], config["MQTT_USERNAME"], config["MQTT_PASSWORD"])
+
+        if not config["NOTIFICATIONS_ENABLED"]:
+            nH.disable()
+
+        nH.set_broker_parameters(mqtt_params)
+        nH.set_notification_topic(config["NOTIFICATIONS_TOPIC"])
+
+        nH.send_notification({"text": "Zwave-socat-controller program has started"})
 
         if config["AUTODISCOVERY_ENABLED"]:
             logger.info("[Main] Autodiscovery mode enabled, searching for nodes...")

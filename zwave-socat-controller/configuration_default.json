@@ -8,5 +8,7 @@
   "ZWAVE_NETWORKS": "",
   "OPENHAB_CONTROL_ENABLED": true,
   "OPENHAB_HOST":"localhost",
+  "NOTIFICATIONS_ENABLED": true,
+  "NOTIFICATIONS_TOPIC": "notifications/zwave-socat-controller",
   "DEBUG": false
 }

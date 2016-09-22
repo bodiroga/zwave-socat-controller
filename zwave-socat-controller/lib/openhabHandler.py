@@ -5,6 +5,7 @@ import re
 import subprocess
 import os
 import logging
+import notificationsHandler as nH
 
 logger = logging.getLogger(__name__)
 
@@ -169,6 +170,7 @@ class OpenHABHandler(object):
 
     def __restart_openhab(self, timeout):
         logger.info("[openHABHandler] Restarting openHAB...")
+        nH.send_notification({"text": "Restarting openHAB..."})
         restart_time = time.time()
         self.openhab_state = "stopping"
         self.__update_installed_addons()
@@ -180,5 +182,7 @@ class OpenHABHandler(object):
                 break
         if time.time() > restart_time + timeout:
             logger.error("[openHABHandler] Timeout restarting openHAB (> {} seconds)".format(timeout))
+            nH.send_notification({"text": "Timeout restarting openHAB (> {} seconds)".format(timeout)})
         else:
-            logger.info("[openHABHandler] openHAB restarted in {} seconds".format(time.time()-restart_time))
+            logger.info("[openHABHandler] openHAB restarted in {:.0f} seconds".format(time.time()-restart_time))
+            nH.send_notification({"text": "openHAB restarted in {:.0f} seconds".format(time.time()-restart_time)})
