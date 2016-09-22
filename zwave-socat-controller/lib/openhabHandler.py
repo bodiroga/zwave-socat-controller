@@ -109,7 +109,8 @@ class OpenHABHandler(object):
         if not ss:
             ss = self.__ss_result()
 
-        bundle_search = re.compile(ur'\d{{2,4}}\s+(\w+)\s+{0}'.format(bundle_name))
+        pattern = ur'\d{{2,4}}\s+(\w+)\s+{0}'.format(bundle_name)
+        bundle_search = re.compile(pattern)
         bundle_search_result = re.search(bundle_search, ss)
 
         if bundle_search_result:
