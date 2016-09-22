@@ -11,6 +11,7 @@ import re
 import json
 import zipfile
 import signal
+import traceback
 import paho.mqtt.client as mqtt_client
 from lib.openhabHandler import OpenHABHandler
 import lib.notificationsHandler as nH
@@ -587,4 +588,4 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         logger.info("[Main] Stopping the script manually...")
     except Exception as e:
-        logger.error("[Error] {}".format(e))
+        logger.error(traceback.format_exc())
