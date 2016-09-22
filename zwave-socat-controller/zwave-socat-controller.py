@@ -214,8 +214,10 @@ class ZWaveBindingsHandler(object):
     def update_default_file(self, zwave_bindings):
         zwave_ports = ["/dev/{}".format(binding) for binding in zwave_bindings]
         configured_serial_ports = []
+        reboot = False
+        old_line = new_line = None
         java_args_keyword = "JAVA_ARGS="
-        serial_keyword = "-Dgnu.io.rxtx.SerialPorts="
+        sp_keyword = "-Dgnu.io.rxtx.SerialPorts="
 
         with open(self.default_file, 'r') as f:
             content = f.read()
@@ -225,18 +227,18 @@ class ZWaveBindingsHandler(object):
                 old_line = line
                 java_args = line.strip(java_args_keyword).replace('"','').split(" ")
 
-                configured_other_java_args = [arg for arg in java_args if serial_keyword not in arg]
-                __configured_serial_ports = [arg.strip(serial_keyword) for arg in java_args if serial_keyword in arg]
+                configured_other_java_args = [arg for arg in java_args if sp_keyword not in arg]
+                __configured_serial_ports = [arg.replace(sp_keyword,'') for arg in java_args if sp_keyword in arg]
                 if __configured_serial_ports:
                     configured_serial_ports = __configured_serial_ports[0].split(":")
 
                 configured_zwave_ports = [port for port in configured_serial_ports if "zwave" in port]
                 configured_other_ports = [port for port in configured_serial_ports if "zwave" not in port]
 
-                reboot = zwave_ports > configured_zwave_ports
+                reboot = set(zwave_ports) != set(configured_zwave_ports)
 
                 new_serial_ports = ":".join(zwave_ports + configured_other_ports)
-                new_serial_ports_text = serial_keyword + new_serial_ports
+                new_serial_ports_text = sp_keyword + new_serial_ports
                 new_java_args = " ".join([new_serial_ports_text] + configured_other_java_args)
                 new_line = java_args_keyword + '"' + new_java_args + '"'
                 break
@@ -359,14 +361,20 @@ class GitHubInfoHandler(object):
 class NodeController(object):
 
     MAX_TIMEOUT = 24 # hours
+    openhab_control_enabled = True
+    binding_status = {}
+    active_nodes = {}
+    oh = None
+    zbh = None
 
     def __init__(self, mqtt_params=MqttBrokerParameters(), prefix="/devices", openhab_control_enabled=True):
         self.mqtt_params = mqtt_params
         self.prefix = prefix
-        self.openhab_control_enabled = openhab_control_enabled
         self.detected_nodes = {}
-        self.active_nodes = {}
-        if self.openhab_control_enabled: self.zbh = ZWaveBindingsHandler()
+        NodeController.openhab_control_enabled = openhab_control_enabled
+        if NodeController.openhab_control_enabled:
+            NodeController.oh = OpenHABHandler()
+            NodeController.zbh = ZWaveBindingsHandler()
         self.timer = None
         self.client = mqtt_client.Client("zwave-node-controller")
         self.client.username_pw_set(self.mqtt_params.user, self.mqtt_params.passw)
@@ -399,36 +407,55 @@ class NodeController(object):
         delete_nodes = list(set(active_nodes_list) - set(correct_nodes))
         for node in new_nodes:
             logger.info("[Controller] Node detected: {}".format(node))
-            self.active_nodes[node] = None
+            NodeController.active_nodes[node] = Node(node, self.mqtt_params, self.prefix)
         for node in delete_nodes:
             logger.info("[Controller] Node deleted: {}".format(node))
-        if self.openhab_control_enabled and (new_nodes or delete_nodes):
-            self.zbh.update(correct_nodes)
-        for node in new_nodes:
-            self.active_nodes[node] = Node(node, self.mqtt_params, self.prefix, self.openhab_control_enabled)
-        for node in delete_nodes:
-            self.active_nodes[node].delete()
-            del self.active_nodes[node]
+            NodeController.active_nodes[node].delete()
+            del NodeController.active_nodes[node]
+        if NodeController.openhab_control_enabled and (new_nodes or delete_nodes):
+            NodeController.zbh.update(correct_nodes)
+
+    @staticmethod
+    def handle_binding(name):
+        if not NodeController.openhab_control_enabled:
+            return
+
+        new_status = NodeController.active_nodes[name].start_binding
+        if name in NodeController.binding_status and NodeController.binding_status[name] == new_status:
+            return
+        NodeController.__start_binding(name) if new_status else NodeController.__stop_binding(name)
+        NodeController.binding_status[name] = new_status
+
+    @staticmethod
+    def __start_binding(name):
+        if not NodeController.oh.start_binding(name):
+            logger.error("[%s] Binding has failed starting..." % (name))
+            NodeController.oh.restart_openhab()
+        else:
+            logger.debug("[%s] Binding correctly started..." % (name))
+
+    @staticmethod
+    def __stop_binding(name):
+        if not NodeController.oh.stop_binding(name):
+            logger.error("[%s] Binding has failed stopping..." % (name))
+            NodeController.oh.restart_openhab()
+        else:
+            logger.debug("[%s] Binding correctly stopped..." % (name))
 
 
 class Node(object):
 
     KILL_TIME = 3
-    restart_timer = None
-    openhab_control_enabled = None
-    oh = None
 
-    def __init__(self, name, mqtt_params=MqttBrokerParameters(), prefix="devices", openhab_control_enabled=True):
+    def __init__(self, name, mqtt_params=MqttBrokerParameters(), prefix="devices"):
         self.mqtt_params = mqtt_params
         self.name = name
         self.online = None
         self.local_port = "/dev/" + name
         self.local_socat_status = None
         self.remote_ip = self.remote_port = self.remote_socat_status = None
-        if not Node.openhab_control_enabled: Node.openhab_control_enabled = openhab_control_enabled
-        if not Node.oh and Node.openhab_control_enabled: Node.oh = OpenHABHandler()
+        self.start_binding = None
         self.kill_timer = None
-        self.kill_local_port(control_binding=False)
         time.sleep(0.05)
 
         self.client = mqtt_client.Client("%s-node-handler" % (self.name))
@@ -476,41 +503,25 @@ class Node(object):
         logger.warning("[%s] Node not healthy..." % (self.name))
         self.kill_local_port()
 
-    def kill_local_port(self, control_binding=True):
+    def kill_local_port(self):
+        self.set_binding_status(False)
         kill_command = "kill -9 $(ps ax | grep \"/usr/bin/socat\" | grep \"%s,\" | grep -v grep | awk \'{print $1}\')" % (self.name)
-        if Node.openhab_control_enabled and control_binding:
-            if not Node.oh.stop_binding(self.name):
-                logger.error("[%s] Binding has failed stopping... Restarting openHAB" % (self.name))
-                self.restart_openhab()
-            else:
-                logger.debug("[%s] Binding correctly stopped..." % (self.name))
         error = subprocess.Popen(kill_command, stderr=subprocess.PIPE, shell=True).communicate()[1]
         self.local_socat_status = "false"
         self.kill_timer = None
         if not error: logger.debug("[%s] Local port killed..." % (self.name))
 
-    def start_local_port(self, control_binding=True):
+    def start_local_port(self):
         socat_command = "/usr/bin/socat pty,link=%s,echo=0,raw,waitslave,group=dialout,mode=660 tcp:%s:%s" % (self.local_port, self.remote_ip, self.remote_port)
         sh_command = "while true; do %s; done" % (socat_command)
-        result = subprocess.Popen(sh_command, shell=True)
+        subprocess.Popen(sh_command, stderr=subprocess.PIPE, shell=True)
         self.local_socat_status = "true"
         logger.debug("[%s] Local port started..." % (self.name))
-        if Node.openhab_control_enabled and control_binding:
-            if not Node.oh.start_binding(self.name):
-                logger.error("[%s] Binding has failed starting..." % (self.name))
-                self.restart_openhab()
-            else:
-                logger.debug("[%s] Binding correctly started..." % (self.name))
+        self.set_binding_status(True)
 
-    def restart_openhab(self):
-        if Node.restart_timer:
-            Node.restart_timer.cancel()
-        Node.restart_timer = threading.Timer(1.5, self.__restart_openhab)
-        Node.restart_timer.start()
-
-    def __restart_openhab(self):
-        Node.restart_timer = None
-        Node.oh.restart_openhab()
+    def set_binding_status(self, status):
+        self.start_binding = status
+        NodeController.handle_binding(self.name)
 
     def delete(self):
         self.client.loop_stop()
