@@ -77,6 +77,7 @@ class ZWaveBindingsHandler(object):
         reboot = self.update_jars(zwave_bindings)
         reboot = self.update_configuration_file(zwave_bindings) or reboot
         reboot = self.update_default_file(zwave_bindings) or reboot
+        reboot = self.update_logback_files(zwave_bindings) or reboot
         logger.debug("[ZWaveHandler] Update finished")
         if reboot:
             logger.info("[ZwaveHandler] Configuration changed")
@@ -256,6 +257,54 @@ class ZWaveBindingsHandler(object):
 
         logger.info("[ZWaveHandler] Default file updated")
         return reboot
+
+    def update_logback_files(self, zwave_bindings):
+        logback_folder = "/".join(self.configuration_folder.split("/")[:-1]) + "/"
+        logback_files = ['logback.xml', 'logback_debug.xml']
+        logback_files_paths = [logback_folder + logback_name for logback_name in logback_files]
+
+        def get_logger_text(binding, level):
+            text = '\t<logger name="org.openhab.binding.{0}" level="{1}" additivity="false">\n' \
+                   '\t\t<appender-ref ref="{2}FILE" />\n\t</logger>'.format(binding, level.upper(), binding.upper())
+            return text
+
+        def get_appender_text(binding):
+            text = '\t<appender name="{0}FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">\n' \
+                   '\t\t<file>${{openhab.logdir:-logs}}/{1}.log</file>\n' \
+                   '\t\t<rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">\n' \
+                   '\t\t\t<fileNamePattern>${{openhab.logdir:-logs}}/{2}-%d{{yyyy-ww}}.log.zip</fileNamePattern>\n' \
+                   '\t\t\t<maxHistory>15</maxHistory>\n' \
+                   '\t\t</rollingPolicy>\n' \
+                   '\t\t<encoder>\n' \
+                   '\t\t\t<pattern>%d{{yyyy-MM-dd HH:mm:ss.SSS}} [%-5level] [%-30.30logger{{36}}:%-4line]- ' \
+                   '%msg%n</pattern>\n' \
+                   '\t\t</encoder>\n' \
+                   '\t</appender>'.format(binding.upper(), binding, binding)
+            return text
+
+        for logback_file in logback_files_paths:
+            log_level = 'debug' if 'debug' in logback_file else 'info'
+
+            with open(logback_file, 'r') as f:
+                content = f.read()
+
+            for zwave in zwave_bindings:
+                if '<logger name="org.openhab.binding.{0}"'.format(zwave) not in content:
+                    old_line = '<logger name="org.openhab" level="{0}"/>'.format(log_level.upper())
+                    if log_level == "debug":
+                        old_line = '<logger name="org.openhab" level="{0}" />'.format(log_level.upper())
+                    new_line = old_line + "\n\n" + get_logger_text(zwave, log_level)
+                    content = content.replace(old_line, new_line)
+
+                if '<appender name="{0}FILE"'.format(zwave.upper()) not in content:
+                    old_line = '\t<logger name="runtime.busevents" level="INFO" additivity="false">'
+                    new_line = get_appender_text(zwave) + '\n\n' + old_line
+                    content = content.replace(old_line, new_line)
+
+            with open(logback_file, 'w') as f:
+                f.write(content)
+
+        return False
 
 
 class GitHubInfoHandler(object):
